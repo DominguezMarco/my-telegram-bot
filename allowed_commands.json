@@ -1,0 +1,7 @@
+{
+  "fecha": ["date"],
+  "uso disco": ["df", "-h"],
+  "memoria": ["free", "-m"],
+  "usuario": ["whoami"],
+  "tiempo encendido": ["uptime"]
+}

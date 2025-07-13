@@ -8,40 +8,54 @@ logging.basicConfig(
     level=logging.INFO
 )
 
-TOKEN = "YOUR_TELEGRAM_BOT_TOKEN"
+# Leer el token desde un archivo externo
+def get_token(filename="bot_token.txt"):
+    with open(filename, "r") as f:
+        return f.read().strip()
 
-# Define a whitelist of allowed commands
-ALLOWED_COMMANDS = {
-    "date": ["date"],
-    "uptime": ["uptime"],
-    "df": ["df", "-h"],
-    # Add more allowed commands here
-}
+# Leer comandos permitidos desde un archivo externo
+def get_allowed_commands(filename="allowed_commands.txt"):
+    allowed = {}
+    with open(filename, "r") as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            key = line.split()[0]
+            allowed[key] = line.split()
+    return allowed
+
+TOKEN = get_token()
+ALLOWED_COMMANDS = get_allowed_commands()
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Hi! I'm your bot. Send me a message and I'll echo it back! Use /run <command> to run a server command.")
+    await update.message.reply_text(
+        "¡Hola! Soy tu bot. Usa /run <comando> para ejecutar un comando permitido en el servidor.\n"
+        "Comandos permitidos: " + ", ".join(ALLOWED_COMMANDS.keys())
+    )
 
 async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(update.message.text)
 
 async def run_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:
-        await update.message.reply_text("Usage: /run <command>. Allowed commands: " + ", ".join(ALLOWED_COMMANDS.keys()))
+        await update.message.reply_text(
+            "Uso: /run <comando>. Comandos permitidos: " + ", ".join(ALLOWED_COMMANDS.keys())
+        )
         return
 
     cmd = context.args[0]
     if cmd not in ALLOWED_COMMANDS:
-        await update.message.reply_text(f"Command '{cmd}' not allowed.")
+        await update.message.reply_text(f"Comando '{cmd}' no permitido.")
         return
 
     try:
         output = subprocess.check_output(ALLOWED_COMMANDS[cmd], stderr=subprocess.STDOUT, text=True)
-        # Telegram messages have a length limit
         if len(output) > 4000:
             output = output[:3997] + "..."
-        await update.message.reply_text(f"Output of '{cmd}':\n{output}")
+        await update.message.reply_text(f"Salida de '{cmd}':\n{output}")
     except subprocess.CalledProcessError as e:
-        await update.message.reply_text(f"Error running '{cmd}':\n{e.output}")
+        await update.message.reply_text(f"Error ejecutando '{cmd}':\n{e.output}")
 
 def main():
     app = ApplicationBuilder().token(TOKEN).build()
