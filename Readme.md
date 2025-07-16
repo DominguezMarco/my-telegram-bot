@@ -23,3 +23,9 @@ Create a new file, e.g., bot.py:
 sh
 nano bot.py
 Paste the following code (replace YOUR_TELEGRAM_BOT_TOKEN with your token):
+
+
+
+
+echo -n "miclave123" | sha256sum
+
