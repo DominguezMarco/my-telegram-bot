@@ -3,5 +3,9 @@
   "uso disco": ["df", "-h"],
   "memoria": ["free", "-m"],
   "usuario": ["whoami"],
-  "tiempo encendido": ["uptime"]
+  "tiempo encendido": ["uptime"],
+  "getPublicIP": ["curl", "-s", "https://api.ipify.org"],
+  "getTelegramUser": [],
+  "restartService": [],
+  "anyCommand": []
 }

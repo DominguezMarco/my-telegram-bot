@@ -2,6 +2,7 @@ import logging
 import subprocess
 import json
 import hashlib
+
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
 
@@ -22,19 +23,34 @@ def get_hash(filename="auth_hash.txt"):
     with open(filename, "r") as f:
         return f.read().strip()
 
+def get_allowed_telegram_user(filename="allowed_telegram_user.txt"):
+    with open(filename, "r") as f:
+        return int(f.read().strip())
+
 TOKEN = get_token()
 ALLOWED_COMMANDS = get_allowed_commands()
 PASSWORD_HASH = get_hash()
-
-# Diccionario para guardar chats autenticados
+ALLOWED_TELEGRAM_USER = get_allowed_telegram_user()
 authenticated_chats = set()
 
+def is_authorized(user_id):
+    return user_id == ALLOWED_TELEGRAM_USER
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_authorized(update.effective_user.id):
+        await update.message.reply_text("No estás autorizado para usar este bot.")
+        return
+    help_cmds = [k for k in ALLOWED_COMMANDS.keys() if k not in ["restartService", "anyCommand", "getTelegramUser"]]
     await update.message.reply_text(
-        "¡Hola! Soy tu bot seguro. Usa /auth <contraseña> para autenticarte antes de ejecutar comandos con /run."
+        "¡Hola! Soy tu bot seguro. Usa /auth <contraseña> para autenticarte antes de ejecutar comandos con /run.\n"
+        "Comandos disponibles: " + ", ".join(help_cmds) +
+        "\nComando especial: /run restartService <servicio> (requiere autenticación y configuración de sudo)"
     )
 
 async def auth(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_authorized(update.effective_user.id):
+        await update.message.reply_text("No estás autorizado para usar este bot.")
+        return
     if not context.args:
         await update.message.reply_text("Uso: /auth <contraseña>")
         return
@@ -42,36 +58,82 @@ async def auth(update: Update, context: ContextTypes.DEFAULT_TYPE):
     password_hash = hashlib.sha256(password.encode()).hexdigest()
     if password_hash == PASSWORD_HASH:
         authenticated_chats.add(update.effective_chat.id)
-        await update.message.reply_text("¡Autenticación exitosa! Ahora puedes usar /run.")
+        await update.message.reply_text("¡Autenticación exitosa! Ahora puedes usar /run y comandos especiales.")
     else:
         await update.message.reply_text("Contraseña incorrecta.")
 
 async def run_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_authorized(update.effective_user.id):
+        await update.message.reply_text("No estás autorizado para usar este bot.")
+        return
     if update.effective_chat.id not in authenticated_chats:
         await update.message.reply_text("No estás autenticado. Usa /auth <contraseña> primero.")
         return
-
     if not context.args:
+        allowed = [k for k in ALLOWED_COMMANDS.keys() if k not in ["restartService", "anyCommand", "getTelegramUser"]]
         await update.message.reply_text(
-            "Uso: /run <alias>. Aliases permitidos: " + ", ".join(ALLOWED_COMMANDS.keys())
+            "Uso: /run <alias>. Aliases permitidos: " + ", ".join(allowed)
         )
         return
 
-    alias = " ".join(context.args)
-    if alias not in ALLOWED_COMMANDS:
-        await update.message.reply_text(f"Alias '{alias}' no permitido.")
+    alias = context.args[0]
+    # Comando seguro desde JSON
+    if alias in ALLOWED_COMMANDS:
+        try:
+            output = subprocess.check_output(ALLOWED_COMMANDS[alias], stderr=subprocess.STDOUT, text=True)
+            if len(output) > 4000:
+                output = output[:3997] + "..."
+            await update.message.reply_text(f"Salida de '{alias}':\n{output}")
+        except Exception as e:
+            await update.message.reply_text(f"Error ejecutando '{alias}':\n{e}")
         return
 
-    try:
-        output = subprocess.check_output(ALLOWED_COMMANDS[alias], stderr=subprocess.STDOUT, text=True)
-        if len(output) > 4000:
-            output = output[:3997] + "..."
-        await update.message.reply_text(f"Salida de '{alias}':\n{output}")
-    except subprocess.CalledProcessError as e:
-        await update.message.reply_text(f"Error ejecutando '{alias}':\n{e.output}")
+    # restartService [service]
+    if alias == "restartService":
+        if len(context.args) < 2:
+            await update.message.reply_text("Uso: /run restartService <servicio>")
+            return
+        service = context.args[1]
+        try:
+            cmd = ["sudo", "systemctl", "restart", service]
+            output = subprocess.check_output(cmd, stderr=subprocess.STDOUT, text=True)
+            await update.message.reply_text(f"Servicio '{service}' reiniciado correctamente.")
+        except subprocess.CalledProcessError as e:
+            await update.message.reply_text(f"Error reiniciando '{service}':\n{e.output}")
+        return
+
+    # anyCommand [cualquier comando]
+    if alias == "anyCommand":
+        if len(context.args) < 2:
+            await update.message.reply_text("Uso: /run anyCommand <comando con parámetros>")
+            return
+        custom_cmd = context.args[1:]
+        try:
+            cmd = ["sudo"] + custom_cmd
+            output = subprocess.check_output(cmd, stderr=subprocess.STDOUT, text=True)
+            if len(output) > 4000:
+                output = output[:3997] + "..."
+            await update.message.reply_text(f"Salida:\n{output}")
+        except subprocess.CalledProcessError as e:
+            await update.message.reply_text(f"Error ejecutando el comando:\n{e.output}")
+        return
+
+    # getTelegramUser
+    if alias == "getTelegramUser":
+        user = update.effective_user
+        info = (
+            f"ID de Telegram: {user.id}\n"
+            f"Nombre: {user.first_name} {user.last_name or ''}\n"
+            f"Username: @{user.username if user.username else ''}"
+        )
+        await update.message.reply_text(info)
+        return
+
+    await update.message.reply_text(f"Alias '{alias}' no permitido.")
 
 async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(update.message.text)
+    if is_authorized(update.effective_user.id):
+        await update.message.reply_text(update.message.text)
 
 def main():
     app = ApplicationBuilder().token(TOKEN).build()
