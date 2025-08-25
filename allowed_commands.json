@@ -1,9 +1,9 @@
 {
   "fecha": ["date"],
-  "uso disco": ["df", "-h"],
+  "usoDisco": ["df", "-h"],
   "memoria": ["free", "-m"],
   "usuario": ["whoami"],
-  "tiempo encendido": ["uptime"],
+  "tiempoEncendido": ["uptime"],
   "getPublicIP": ["curl", "-s", "https://api.ipify.org"],
   "getTelegramUser": [],
   "restartService": [],
