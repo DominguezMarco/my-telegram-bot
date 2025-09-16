@@ -1,6 +1,7 @@
 bot_token.txt
 auth_hash.txt
 allowed_telegram_user.txt
+active_users.txt
 venv/
 *.pyc
 __pycache__/
