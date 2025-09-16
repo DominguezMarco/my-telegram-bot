@@ -7,5 +7,6 @@
   "getPublicIP": ["curl", "-s", "https://api.ipify.org"],
   "getTelegramUser": [],
   "restartService": [],
-  "anyCommand": []
+  "anyCommand": [],
+  "isUserActive": []
 }
